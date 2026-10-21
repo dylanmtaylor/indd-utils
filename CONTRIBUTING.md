@@ -35,7 +35,10 @@ accepted.
   downloads in their own directory, and keep scratch scripts out of it.
 - **Time goes through `chrono`.** Never hand-roll UTC/calendar conversion
   (days-to-date algorithms, leap-year math); a module owns only its output
-  format string.
+  format string. The one exception is range extension: past the years chrono
+  can represent, shift the date by whole 400-year Gregorian cycles (146,097
+  days, after which the calendar repeats), let chrono compute the month, day
+  and time, and add the cycles back to the year.
 
 ## Setting up
 
