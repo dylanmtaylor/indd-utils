@@ -211,11 +211,16 @@ pub fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
 /// onto the Unix epoch.
 const UNIX_EPOCH_DAYS_FROM_CE: i64 = 719_163;
 
-/// The date (year, month, day) of a day count since 1970-01-01.
+/// The date (year, month, day) of a day count since 1970-01-01. A count outside the range chrono
+/// can represent (either as a CE day number or a date) reads as 1970-01-01.
 pub fn civil_from_days(days: i64) -> (i64, i64, i64) {
     use chrono::Datelike;
-    let from_ce = i32::try_from(days.saturating_add(UNIX_EPOCH_DAYS_FROM_CE)).unwrap_or(0);
-    match chrono::NaiveDate::from_num_days_from_ce_opt(from_ce) {
+    // `ok().and_then(..)` rather than `unwrap_or(0)`: a CE count past `i32` would otherwise pass
+    // a valid day 0 to `NaiveDate` (0000-12-31), not the 1970-01-01 fallback the `None` arm gives.
+    let date = i32::try_from(days.saturating_add(UNIX_EPOCH_DAYS_FROM_CE))
+        .ok()
+        .and_then(chrono::NaiveDate::from_num_days_from_ce_opt);
+    match date {
         Some(d) => (
             i64::from(d.year()),
             i64::from(d.month()),
@@ -274,5 +279,9 @@ mod tests {
         assert_eq!(civil_from_days(days_from_civil(2024, 2, 29)), (2024, 2, 29));
         assert_eq!(civil_from_days(days_from_civil(1601, 1, 1)), (1601, 1, 1));
         assert_eq!(day_of_year(days_from_civil(2023, 12, 31) * 86_400), 364);
+        // A day count past what chrono can represent reads as the 1970-01-01 fallback, not a
+        // stray valid date: `i64::MAX` days would overflow the CE `i32` (once became 0000-12-31).
+        assert_eq!(civil_from_days(i64::MAX), (1970, 1, 1));
+        assert_eq!(civil_from_days(i64::MIN), (1970, 1, 1));
     }
 }
