@@ -33,6 +33,9 @@ accepted.
   content.
 - **Treat sample files as untrusted.** Run Python tools with `-I`, keep
   downloads in their own directory, and keep scratch scripts out of it.
+- **Time goes through `chrono`.** Never hand-roll UTC/calendar conversion
+  (days-to-date algorithms, leap-year math); a module owns only its output
+  format string.
 
 ## Setting up
 

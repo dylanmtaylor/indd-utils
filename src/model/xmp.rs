@@ -189,28 +189,40 @@ fn parse(s: &str) -> Option<XmpDate> {
 }
 
 /// Days since 1970-01-01 of a date in the proleptic Gregorian calendar.
+///
+/// The conversion goes through `chrono`. A day past the month's length (a
+/// malformed XMP date that `parse` lets through, e.g. "February 31")
+/// carries forward from the first of the month, exactly as the former
+/// Howard-Hinnant arithmetic did (it was linear in the day).
 pub fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
-    let y = if month <= 2 { year - 1 } else { year };
-    let era = y.div_euclid(400);
-    let yoe = y - era * 400;
-    let mp = (month + 9) % 12;
-    let doy = (153 * mp + 2) / 5 + day - 1;
-    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-    era * 146_097 + doe - 719_468
+    use chrono::Datelike;
+    let base = i32::try_from(year).ok().and_then(|y| {
+        u32::try_from(month)
+            .ok()
+            .and_then(|m| chrono::NaiveDate::from_ymd_opt(y, m, 1))
+    });
+    match base {
+        Some(first) => i64::from(first.num_days_from_ce()) - UNIX_EPOCH_DAYS_FROM_CE + day - 1,
+        None => 0,
+    }
 }
+
+/// `NaiveDate::num_days_from_ce` of 1970-01-01, so the count can be rebased
+/// onto the Unix epoch.
+const UNIX_EPOCH_DAYS_FROM_CE: i64 = 719_163;
 
 /// The date (year, month, day) of a day count since 1970-01-01.
 pub fn civil_from_days(days: i64) -> (i64, i64, i64) {
-    let z = days + 719_468;
-    let era = z.div_euclid(146_097);
-    let doe = z - era * 146_097;
-    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let day = doy - (153 * mp + 2) / 5 + 1;
-    let month = if mp < 10 { mp + 3 } else { mp - 9 };
-    let year = yoe + era * 400 + i64::from(month <= 2);
-    (year, month, day)
+    use chrono::Datelike;
+    let from_ce = i32::try_from(days.saturating_add(UNIX_EPOCH_DAYS_FROM_CE)).unwrap_or(0);
+    match chrono::NaiveDate::from_num_days_from_ce_opt(from_ce) {
+        Some(d) => (
+            i64::from(d.year()),
+            i64::from(d.month()),
+            i64::from(d.day()),
+        ),
+        None => (1970, 1, 1),
+    }
 }
 
 /// The day of the year (0-based) of an instant, in UTC.
